@@ -3,7 +3,7 @@ services:
     name: tabletrail
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: node scripts/start-hosted.js
     healthCheckPath: /api/health
     envVars:
