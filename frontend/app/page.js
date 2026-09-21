@@ -1,105 +1,407 @@
-"use client";
+'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { LayoutDashboard, ShoppingBag, Package, Users, Settings, Leaf, ArrowUpRight, IndianRupee, Store, LogOut, Plus, UtensilsCrossed } from 'lucide-react';
-const money=n=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(Number(n||0));
-async function api(path,method='GET',data) {
- const response=await fetch('/api'+path,{method,headers:{'Content-Type':'application/json'},...(data===undefined?{}:{body:JSON.stringify(data)})});
- const result=await response.json();if(!response.ok) throw new Error(result.error || 'Request failed');return result;
-}
-function Table({columns,rows,empty='No records yet.'}) {return <div className="table-wrap"><table><thead><tr>{columns.map(([key,label])=><th key={key}>{label}</th>)}</tr></thead><tbody>{rows.map((row,index)=><tr key={row.id??index}>{columns.map(([key,,render])=><td key={key}>{render?render(row):String(row[key]??'—')}</td>)}</tr>)}</tbody></table>{!rows.length&&<div className="empty">{empty}</div>}</div>;}
-function Brand(){return <div className="brand"><span className="brand-mark"><UtensilsCrossed size={21}/></span>TableTrail<span style={{color:'#a8c496'}}>.</span></div>;}
-function Status({value}){return <span className={'badge '+value}>{value}</span>;}
-const resources={
- branches:{label:'Branches',fields:[['name','Name'],['city','City'],['active','Active','boolean']]},
- employees:{label:'Employees',fields:[['name','Name'],['email','Email','email'],['role','Role',['admin','manager','staff']],['branch_id','Branch','branches'],['password','Password (leave blank to keep)','password'],['active','Active','boolean']]},
- menu:{label:'Menu',fields:[['name','Name'],['category_id','Category','categories'],['price','Price (₹)','number'],['active','Active','boolean']]},
- categories:{label:'Categories',fields:[['name','Name']]},
- ingredients:{label:'Ingredients',fields:[['name','Name'],['unit','Unit',['g','ml','piece']]]},
- suppliers:{label:'Suppliers',fields:[['name','Name'],['email','Email','email']]},
- promotions:{label:'Promotions',fields:[['code','Code'],['discount_percent','Discount %','number'],['starts_on','Start date','date'],['ends_on','End date','date']]},
- campaigns:{label:'Campaigns',fields:[['name','Name'],['promotion_id','Promotion','promotions'],['channel','Channel',['email','social','in-store']],['budget','Budget (₹)','number']]},
- customers:{label:'Customers',fields:[['name','Name'],['email','Email','email'],['phone','Phone']]},
-};
-function RecordForm({resource,record,lookups,onSave,onCancel,busy}) {
- const definition=resources[resource];
- const [values,setValues]=useState(()=>Object.fromEntries(definition.fields.map(([k,,t])=>[k,t==='boolean'?(record?!!record[k]:true):t==='date'?(record?.[k]?.slice(0,10)||''):(record?.[k]??'')])));
- function submit(e){e.preventDefault();const data={...values};if(resource==='employees'){if(!data.password)delete data.password;data.branch_id=data.branch_id?Number(data.branch_id):null;}onSave(data);}
- return <form className="panel form-grid" onSubmit={submit}><h2 className="col-span-full">{record?'Edit':'Add'} {definition.label.toLowerCase()}</h2>{definition.fields.map(([key,label,type='text'])=>{
- const options=Array.isArray(type)?type.map(v=>({id:v,name:v})):lookups[type];
- return <label key={key} className={type==='boolean'?'check':''}>{label}{type==='boolean'?<input type="checkbox" checked={values[key]} onChange={e=>setValues({...values,[key]:e.target.checked})}/>:options?<select value={values[key]} required={!(resource==='employees'&&key==='branch_id')} onChange={e=>setValues({...values,[key]:e.target.value})}><option value="">Select…</option>{options.map(v=><option key={v.id} value={v.id}>{v.name||v.code}</option>)}</select>:<input type={type} step={type==='number'?'0.01':undefined} min={type==='number'?0:undefined} autoComplete={type==='password'?'new-password':undefined} required={!['phone','password'].includes(key)} value={values[key]} onChange={e=>setValues({...values,[key]:e.target.value})}/>}</label>;
- })}<div className="form-actions"><button className="primary" disabled={busy}>Save</button><button type="button" className="secondary" onClick={onCancel}>Cancel</button></div></form>;
-}
-function Records({resource,lookups,run,refresh,busy}) {
- const [rows,setRows]=useState([]),[editing,setEditing]=useState(undefined);
- const load=useCallback(()=>api('/'+resource).then(setRows),[resource]);
- useEffect(()=>{load().catch(e=>run(()=>Promise.reject(e)));setEditing(undefined);},[load]);
- const definition=resources[resource];
- return <div className="stack"><div className="flex items-center justify-between"><p className="muted mb-0">Add or edit records. Deactivate branches, menu items, and employees to retain history.</p><button className="primary small" onClick={()=>setEditing(null)}>+ Add</button></div>
- {editing!==undefined&&<RecordForm key={resource+':'+(editing?.id||'new')} resource={resource} record={editing} lookups={lookups} busy={busy} onCancel={()=>setEditing(undefined)} onSave={data=>run(async()=>{await api('/'+resource+(editing?'/'+editing.id:''),editing?'PUT':'POST',data);setEditing(undefined);await load();await refresh();},'Record saved')}/>}
- <div className="panel"><Table rows={rows} columns={[['id','ID'],...definition.fields.filter(([k])=>k!=='password').map(([key,label,type])=>[key,label,row=>type==='boolean'?(row[key]?'Yes':'No'):lookups[type]?(lookups[type].find(v=>v.id===row[key])?.name||lookups[type].find(v=>v.id===row[key])?.code||'—'):type==='date'?row[key]?.slice(0,10):row[key]]),['action','',r=><button className="secondary small" onClick={()=>setEditing(r)}>Edit</button>]]}/></div></div>;
-}
-function Dashboard({data,orders,onOrders}) {
- if(!data)return <div className="spinner">Loading database reports…</div>;
- const s=data.summary,maxDay=Math.max(1,...data.daily.map(d=>d.revenue)),maxUnits=Math.max(1,...data.bestSellers.map(d=>d.units));
- return <><div className="cards">{[["Net revenue",money(s.revenue),IndianRupee,'Completed payments'],['Completed orders',s.orders,ShoppingBag,'Across selected branches'],['Active branches',s.activeBranches,Store,'Currently operating'],['Customers',s.customers,Users,'Registered globally · served by branch']].map(([label,value,Icon,note])=><div className="card" key={label}><div className="card-top">{label}<Icon size={17}/></div><div className="metric">{value}</div><div className="muted text-xs">{note}</div></div>)}</div>
- <div className="grid-main"><section className="panel"><div className="panel-head"><div><h2>Revenue overview</h2><p>Recorded payments · last 7 days</p></div><span className="badge">INR</span></div><div className="chart">{data.daily.map(d=><div className="chart-col" key={d.day} title={d.day+': '+money(d.revenue)}><span>{money(d.revenue)}</span><div className="chart-bar" style={{height:Math.max(2,120*d.revenue/maxDay)}}/><span>{d.day.slice(5)}</span></div>)}</div>{!data.daily.length&&<p className="muted">No payments in the last seven days.</p>}<div className="flex justify-between text-xs muted border-t pt-4" style={{borderColor:'var(--line)'}}><span>Average order value <strong className="text-green-900">{money(s.orders?s.revenue/s.orders:0)}</strong></span><span>Customer rating <strong className="text-green-900">{s.averageRating?s.averageRating.toFixed(1)+' / 5':'No ratings'}</strong></span></div></section>
- <section className="panel"><div className="panel-head"><div><h2>Best-selling dishes</h2><p>Ranked by units sold · all time</p></div><UtensilsCrossed size={19}/></div><div className="bar-list">{data.bestSellers.map((d,i)=><div key={d.name}><div className="bar-label"><span><span className="muted mr-3">0{i+1}</span>{d.name}</span><strong>{d.units} sold</strong></div><div className="track"><div className="fill" style={{width:(d.units/maxUnits*100)+'%'}}/></div></div>)}</div></section></div>
- <div className="grid-main"><section className="panel"><div className="panel-head"><div><h2>Branch performance</h2><p>A clear view of every restaurant</p></div><Store size={19}/></div><Table rows={data.branches} columns={[["name","Branch"],['orders','Orders'],['revenue','Net revenue',r=>money(r.revenue)],['customers','Customers']]}/></section><section className="panel"><div className="panel-head"><div><h2>Inventory watch</h2><p>Ingredients below their stock threshold</p></div><span className="badge low">{data.lowStock.length} low</span></div>{data.lowStock.length?data.lowStock.map(r=><div className="stock-row" key={r.branch_id+'-'+r.ingredient_id}><div><strong>{r.ingredient}</strong><small>{r.branch}</small></div><div><span className="badge low">{r.quantity} {r.unit}</span><small>Minimum {r.threshold} {r.unit}</small></div></div>):<div className="empty">All ingredients are above threshold.</div>}</section></div>
- <section className="panel"><div className="panel-head"><div><h2>Recent orders</h2><p>The latest activity from your restaurants</p></div><button className="secondary small" onClick={onOrders}>View orders <ArrowUpRight size={13} className="inline"/></button></div><Table rows={orders.slice(0,5)} columns={[["id","Order",r=>'#TT-'+r.id],['customer','Customer'],['branch','Branch'],['total','Amount',r=>money(r.total)],['status','Status',r=><Status value={r.status}/>]]}/></section></>;
-}
-function NewOrder({lookups,branch,user,run,refresh,busy,onClose}){
- const [branchId,setBranchId]=useState(branch||user.branch_id||lookups.branches.find(b=>b.active)?.id||''),[customer,setCustomer]=useState(''),[promotion,setPromotion]=useState(''),[cart,setCart]=useState({});
- const menu=lookups.menu.filter(m=>m.active&&lookups.availability.some(a=>a.branch_id===Number(branchId)&&a.menu_item_id===m.id&&a.available));
- const promo=lookups.promotions.find(p=>p.id===Number(promotion));
- const subtotal=Object.entries(cart).reduce((s,[id,q])=>s+(lookups.menu.find(m=>m.id===Number(id))?.price||0)*q,0);
- async function submit(e){e.preventDefault();await run(async()=>{await api('/orders','POST',{branch_id:Number(branchId),customer_id:Number(customer),promotion_id:promotion?Number(promotion):null,items:Object.entries(cart).filter(([,q])=>q>0).map(([id,quantity])=>({menu_item_id:Number(id),quantity}))});await refresh();onClose();},'Order created. Complete payment to deduct ingredients.');}
- return <form onSubmit={submit} className="order-layout"><section className="stack"><div className="panel form-grid"><label>Branch<select required value={branchId} onChange={e=>{setBranchId(e.target.value);setCart({});}}>{lookups.branches.filter(b=>b.active).map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label><label>Customer<select required value={customer} onChange={e=>setCustomer(e.target.value)}><option value="">Select customer</option>{lookups.customers.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></div><div className="menu-grid">{menu.map(m=><article className="menu-card" key={m.id}><div className="menu-icon"><UtensilsCrossed size={24}/></div><div><h3 className="mb-1">{m.name}</h3><span className="muted text-xs">{lookups.categories.find(c=>c.id===m.category_id)?.name}</span></div><div className="flex justify-between items-center"><strong>{money(m.price)}</strong><button type="button" className="secondary small" onClick={()=>setCart({...cart,[m.id]:Math.min(50,(cart[m.id]||0)+1)})}><Plus size={12} className="inline"/> Add</button></div></article>)}</div>{!menu.length&&<p className="empty">No available menu items at this branch.</p>}</section><aside className="panel self-start"><h2>New order</h2>{Object.entries(cart).filter(([,q])=>q>0).map(([id,q])=><div className="cart-row" key={id}><div><strong>{lookups.menu.find(m=>m.id===Number(id))?.name}</strong><div className="mt-2"><button type="button" className="secondary small" onClick={()=>setCart({...cart,[id]:0})}>Remove</button></div></div><label>Qty<input type="number" min="1" max="50" value={q} onChange={e=>setCart({...cart,[id]:Number(e.target.value)})}/></label></div>)}{!subtotal&&<p className="empty">Choose dishes from the menu.</p>}<label className="mt-5">Promotion<select value={promotion} onChange={e=>setPromotion(e.target.value)}><option value="">No promotion</option>{lookups.promotions.map(p=><option key={p.id} value={p.id}>{p.code} · {p.discount_percent}%</option>)}</select></label><div className="cart-total"><span>Estimated total</span><span>{money(subtotal*(1-(promo?.discount_percent||0)/100))}</span></div><p className="muted text-xs">The server verifies availability, prices, and promotion dates. Stock is deducted when payment is completed.</p><button disabled={busy||!subtotal} className="primary w-full">Create order</button><button type="button" className="secondary w-full mt-2" onClick={onClose}>Cancel</button></aside></form>;
-}
-function Orders({rows,run,refresh,busy}) {
- const [selected,setSelected]=useState(null),[method,setMethod]=useState('cash'),[rating,setRating]=useState('5'),[comment,setComment]=useState('');
- return <div className="stack">{selected&&<section className="panel"><div className="flex justify-between"><h2>Order #TT-{selected.id} · {money(selected.total)}</h2><button className="secondary small" onClick={()=>setSelected(null)}>Close</button></div>{selected.feedback_token&&<p className="mt-3 mb-4"><a className="text-green-800 underline" href={'/feedback?token='+encodeURIComponent(selected.feedback_token)} target="_blank" rel="noreferrer">Open customer feedback page ↗</a><span className="muted text-xs block mt-1">Share this order-specific link with the customer. Valid for 30 days.</span></p>}<Table rows={selected.items} columns={[["name","Dish"],['quantity','Quantity'],['unit_price','Price',r=>money(r.unit_price)]]}/>{selected.status==='pending'?<div className="flex gap-3 items-end mt-5"><label>Payment method<select value={method} onChange={e=>setMethod(e.target.value)}>{['cash','card','upi'].map(m=><option key={m}>{m}</option>)}</select></label><button disabled={busy} className="primary" onClick={()=>run(async()=>{await api('/orders/'+selected.id+'/complete','POST',{method});setSelected(null);await refresh();},'Payment recorded. Inventory updated.')}>Complete payment</button><button disabled={busy} className="secondary" onClick={()=>run(async()=>{await api('/orders/'+selected.id+'/cancel','POST',{});setSelected(null);await refresh();},'Order cancelled')}>Cancel order</button></div>:selected.status==='completed'&&<form className="form-grid mt-5" onSubmit={e=>{e.preventDefault();run(async()=>{await api('/orders/'+selected.id+'/feedback','POST',{rating:Number(rating),comment});setSelected(null);setComment('');await refresh();},'Feedback saved');}}><label>Customer rating<select value={rating} onChange={e=>setRating(e.target.value)}>{[5,4,3,2,1].map(r=><option key={r} value={r}>{r} / 5</option>)}</select></label><label>Customer comment<input maxLength={500} value={comment} onChange={e=>setComment(e.target.value)}/></label><div><button className="primary" disabled={busy}>Record customer feedback</button><p className="muted text-xs mt-2">One feedback entry per completed order.</p></div></form>}</section>}
- <section className="panel"><Table rows={rows} columns={[["id","Order",r=>'#TT-'+r.id],['customer','Customer'],['branch','Branch'],['created_at','Placed',r=>new Date(r.created_at).toLocaleDateString('en-IN')],['total','Total',r=>money(r.total)],['status','Status',r=><Status value={r.status}/>],['action','',r=><button className="secondary small" onClick={()=>run(async()=>{setSelected(await api('/orders/'+r.id));})}>View</button>]]}/><p className="muted text-xs mt-4 mb-0">Showing the most recent 100 orders. Reports include all completed orders.</p></section></div>;
-}
-function Inventory({lookups,branch,run,refresh,busy}){
- const [rows,setRows]=useState([]),[edit,setEdit]=useState(null),[add,setAdd]=useState(0),[threshold,setThreshold]=useState(0);
- const load=useCallback(()=>api('/inventory'+(branch?'?branch_id='+branch:'')).then(setRows),[branch]);
- useEffect(()=>{load().catch(e=>run(()=>Promise.reject(e)));setEdit(null);},[load]);
- const availability=lookups.availability.filter(a=>!branch||a.branch_id===Number(branch));
- return <div className="stack">{edit&&<form className="panel form-grid" onSubmit={e=>{e.preventDefault();run(async()=>{await api(`/inventory/${edit.branch_id}/${edit.ingredient_id}`,'PUT',{add:Number(add),threshold:Number(threshold)});setEdit(null);await load();await refresh();},'Stock updated');}}><h2 className="col-span-full">Restock {edit.ingredient} · {edit.branch}</h2><label>Add quantity ({edit.unit})<input type="number" step="0.001" min="0" required value={add} onChange={e=>setAdd(e.target.value)}/></label><label>Low stock threshold ({edit.unit})<input type="number" step="0.001" min="0" required value={threshold} onChange={e=>setThreshold(e.target.value)}/></label><div className="form-actions"><button className="primary" disabled={busy}>Save stock</button><button type="button" className="secondary" onClick={()=>setEdit(null)}>Cancel</button></div></form>}
- <section className="panel"><h2>Ingredient inventory</h2><Table rows={rows} columns={[["ingredient","Ingredient"],['branch','Branch'],['quantity','On hand',r=>r.quantity+' '+r.unit],['threshold','Threshold',r=>r.threshold+' '+r.unit],['stock','Stock',r=><Status value={r.quantity<r.threshold?'low':'healthy'}/>],['action','',r=><button className="secondary small" onClick={()=>{setEdit(r);setAdd(0);setThreshold(r.threshold);}}>Restock</button>]]}/></section><section className="panel"><h2>Branch menu availability</h2><Table rows={availability} columns={[["item","Dish"],['branch','Branch'],['available','Available',r=><input aria-label={'Availability of '+r.item+' at '+r.branch} type="checkbox" style={{width:18}} checked={!!r.available} disabled={busy} onChange={e=>run(async()=>{await api(`/availability/${r.branch_id}/${r.menu_item_id}`,'PUT',{available:e.target.checked});await refresh();},'Availability saved')}/>]]}/></section></div>;
-}
-function Recipes({lookups,run,busy}){
- const [recipes,setRecipes]=useState([]),[quotes,setQuotes]=useState([]),[menuId,setMenuId]=useState(''),[lines,setLines]=useState([{ingredient_id:'',quantity:1}]);
- async function load(){const [r,q]=await Promise.all([api('/recipes'),api('/supplier-quotes')]);setRecipes(r);setQuotes(q);}
- useEffect(()=>{load().catch(e=>run(()=>Promise.reject(e)));},[]);
- return <div className="stack"><section className="panel"><h2>Recipes</h2><p className="muted">Quantities are per serving, in each ingredient’s base unit. Saving replaces the selected dish’s recipe.</p><Table rows={recipes} columns={[["item","Dish"],['ingredient','Ingredient'],['quantity','Per serving',r=>r.quantity+' '+r.unit]]}/><form className="stack mt-5" onSubmit={e=>{e.preventDefault();run(async()=>{await api('/recipes/'+menuId,'PUT',lines.map(l=>({ingredient_id:Number(l.ingredient_id),quantity:Number(l.quantity)})));await load();},'Recipe saved');}}><label>Dish<select required value={menuId} onChange={e=>{setMenuId(e.target.value);const existing=recipes.filter(r=>r.menu_item_id===Number(e.target.value));setLines(existing.length?existing.map(r=>({ingredient_id:r.ingredient_id,quantity:r.quantity})):[{ingredient_id:'',quantity:1}]);}}><option value="">Select a dish</option>{lookups.menu.map(m=><option value={m.id} key={m.id}>{m.name}</option>)}</select></label>{lines.map((l,i)=><div className="flex gap-3 items-end" key={i}><label className="flex-1">Ingredient<select required value={l.ingredient_id} onChange={e=>setLines(lines.map((v,j)=>j===i?{...v,ingredient_id:e.target.value}:v))}><option value="">Select</option>{lookups.ingredients.map(g=><option key={g.id} value={g.id}>{g.name} ({g.unit})</option>)}</select></label><label>Quantity<input required type="number" min="0.001" step="0.001" value={l.quantity} onChange={e=>setLines(lines.map((v,j)=>j===i?{...v,quantity:e.target.value}:v))}/></label><button type="button" className="secondary" onClick={()=>setLines(lines.filter((_,j)=>i!==j))}>Remove</button></div>)}<div className="actions"><button type="button" className="secondary" onClick={()=>setLines([...lines,{ingredient_id:'',quantity:1}])}>Add ingredient</button><button className="primary" disabled={busy||!lines.length}>Save recipe</button></div></form></section>
- <section className="panel"><h2>Supplier costs</h2><Table rows={quotes} columns={[["supplier","Supplier"],['ingredient','Ingredient'],['unit_cost','Cost per unit',r=>money(r.unit_cost)+' / '+r.unit]]}/><form className="form-grid mt-5" onSubmit={e=>{e.preventDefault();const values=Object.fromEntries(new FormData(e.currentTarget));run(async()=>{await api('/supplier-quotes','PUT',values);await load();},'Supplier quote saved');}}><label>Supplier<select name="supplier_id" required><option value="">Select</option>{lookups.suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label>Ingredient<select name="ingredient_id" required><option value="">Select</option>{lookups.ingredients.map(g=><option key={g.id} value={g.id}>{g.name} ({g.unit})</option>)}</select></label><label>Cost per base unit (₹)<input name="unit_cost" type="number" min="0.0001" step="0.0001" required/></label><div className="self-end"><button className="primary" disabled={busy}>Save quote</button></div></form></section></div>;
-}
-function Reports({data}){if(!data)return null;return <div className="stack"><section className="panel"><h2>Customer behavior</h2><Table rows={data.customers} columns={[["name","Customer"],['orders','Visits'],['spending','Total spending',r=>money(r.spending)],['average_order_value','Average order',r=>money(r.average_order_value)],['repeat','Repeat visitor',r=>r.orders>1?'Yes':'No']]}/></section><section className="panel"><h2>Frequently ordered items</h2><Table rows={data.favorites} columns={[["customer","Customer"],['item','Dish'],['units','Units']]}/></section><section className="panel"><h2>Promotion performance</h2><Table rows={data.promotions} columns={[["code","Code"],['orders','Paid orders'],['discount_amount','Discount given',r=>money(r.discount_amount)],['revenue','Net revenue',r=>money(r.revenue)]]}/></section><section className="panel"><h2>Category performance</h2><Table rows={data.categories} columns={[["name","Category"],['units','Units sold'],['gross_sales','Gross sales',r=>money(r.gross_sales)]]}/><p className="muted text-xs mt-3">Gross item sales are before promotions. Net revenue elsewhere is after discounts.</p></section><section className="panel"><h2>Customer feedback</h2><Table rows={data.feedback} columns={[["order_id","Order"],['customer','Customer'],['branch','Branch'],['rating','Rating',r=>r.rating+' / 5'],['comment','Comment',r=><div className="feedback-text">{r.comment}</div>]]}/></section></div>;}
-export default function Home(){
- const [user,setUser]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[notice,setNotice]=useState(null),[page,setPage]=useState('Dashboard'),[branch,setBranch]=useState(''),[data,setData]=useState(null),[orders,setOrders]=useState([]),[lookups,setLookups]=useState({branches:[],menu:[],categories:[],customers:[],promotions:[],availability:[],ingredients:[],suppliers:[]}),[newOrder,setNewOrder]=useState(false),[resource,setResource]=useState('branches');
- const run=useCallback(async(work,message)=>{setBusy(true);setNotice(null);try{await work();if(message)setNotice({text:message});}catch(e){setNotice({text:e.message,error:true});}finally{setBusy(false);}},[]);
- const refresh=useCallback(async()=>{
-  if(!user)return;
-  const suffix=branch?'?branch_id='+branch:'';
-  const keys=['branches','menu','categories','customers','promotions','availability','ingredients','suppliers'];
-  const values=await Promise.all(keys.map(k=>api('/'+k)));
-  setLookups(Object.fromEntries(keys.map((k,i)=>[k,values[i]])));
-  setOrders(await api('/orders'+suffix));
-  if(user.role!=='staff')setData(await api('/analytics'+suffix));
- },[user,branch]);
- useEffect(()=>{api('/auth/me').then(u=>{setUser(u);setPage(u.role==='staff'?'Orders':'Dashboard');}).catch(()=>{}).finally(()=>setLoading(false));},[]);
- useEffect(()=>{if(user)run(refresh);},[refresh,run,user]);
- if(loading)return <div className="spinner">Opening TableTrail…</div>;
- if(!user)return <main className="login"><section className="login-story"><Brand/><div className="eyebrow mt-12" style={{color:'#a8c496'}}>Your restaurant, connected</div><h1>Every order.<br/>Every branch.<br/><span style={{color:'#c6e3aa'}}>One clear picture.</span></h1><p>Track every order. Understand every customer.<br/>Run every branch smarter.</p><div className="mt-10 text-xs" style={{color:'#88ab96'}}>TABLETRAIL / RESTAURANT MANAGEMENT</div></section><section className="login-box"><form onSubmit={e=>{e.preventDefault();const form=new FormData(e.currentTarget);run(async()=>{await api('/auth/login','POST',Object.fromEntries(form));const u=await api('/auth/me');setUser(u);setPage(u.role==='staff'?'Orders':'Dashboard');});}}><div><div className="eyebrow mb-3">Welcome back</div><h1>Sign in to your workspace</h1><p className="muted">A smarter service starts here.</p></div>{notice&&<div className="notice error" role="alert">{notice.text}</div>}<label>Email address<input name="email" type="email" required placeholder="admin@tabletrail.test" autoComplete="username"/></label><label>Password<input name="password" type="password" required autoComplete="current-password"/></label><button className="primary" disabled={busy}>Sign in <ArrowUpRight size={16} className="inline ml-2"/></button><p className="login-foot">Demo accounts: admin@tabletrail.test, manager@tabletrail.test, staff@tabletrail.test.<br/>Use the password chosen during database setup.</p></form></section></main>;
- const navigation=[['Dashboard',LayoutDashboard],['Orders',ShoppingBag],['Inventory',Package],['Customers',Users],['Reports',ArrowUpRight],['Manage',Settings]].filter(([name])=>user.role==='staff'?['Orders','Customers'].includes(name):user.role==='manager'?name!=='Manage':true);
- const descriptions={Dashboard:'A fresh look at how your restaurants are doing.',Orders:'From the first dish to the final payment.',Inventory:'Keep every kitchen ready for service.',Customers:'Build a better understanding of your guests.',Reports:'Useful insights, straight from your database.',Manage:'The essentials that keep your restaurants running.'};
- return <div className="shell"><aside className="sidebar"><Brand/><div className="eyebrow mt-10">Workspace</div><nav className="nav" aria-label="Main navigation">{navigation.map(([name,Icon])=><button key={name} className={page===name?'active':''} onClick={()=>{setPage(name);setNewOrder(false);setNotice(null);}}><Icon size={18}/>{name}</button>)}</nav><div className="sidebar-note"><Leaf size={25} className="mb-3"/><strong className="text-white">Made for better service.</strong><br/>One connected view of your restaurant business.</div><div className="sidebar-user"><div className="avatar">{user.name[0]}</div><div><strong className="text-xs text-white">{user.name}</strong><div className="text-xs capitalize mt-1">{user.role}</div></div></div></aside><main className="main"><header className="topbar"><span className="muted text-xs">Workspace <span className="mx-2">/</span><strong style={{color:'var(--ink)'}}>{page}</strong></span><div className="flex gap-3 items-center">{user.role==='admin'?<select aria-label="Branch filter" value={branch} onChange={e=>{setBranch(e.target.value);setData(null);setNewOrder(false);}}><option value="">All branches</option>{lookups.branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>:<span className="badge">{lookups.branches[0]?.name||'Branch workspace'}</span>}<button aria-label="Sign out" className="secondary small" onClick={()=>run(async()=>{await api('/auth/logout','POST',{});setUser(null);setData(null);setBranch('');},'Signed out')}><LogOut size={16}/></button></div></header><div className="content"><div className="page-heading"><div><div className="eyebrow mb-2">{page==='Dashboard'?'The big picture':'Restaurant workspace'}</div><h1>{newOrder?'Create an order':page==='Dashboard'?'Business overview':page}</h1><p>{descriptions[page]}</p></div>{['Dashboard','Orders'].includes(page)&&!newOrder&&<button className="primary" onClick={()=>{setPage('Orders');setNewOrder(true);}}><Plus size={16} className="inline mr-1"/> New order</button>}</div>{notice&&<div className={'notice '+(notice.error?'error':'')} role={notice.error?'alert':'status'}>{notice.text}<button aria-label="Dismiss message" onClick={()=>setNotice(null)}>×</button></div>}{busy&&<div className="muted text-xs mb-3" role="status">Updating workspace…</div>}
- {page==='Dashboard'&&<Dashboard data={data} orders={orders} onOrders={()=>setPage('Orders')}/>}
- {page==='Orders'&&(newOrder?<NewOrder lookups={lookups} branch={branch} user={user} run={run} refresh={refresh} busy={busy} onClose={()=>setNewOrder(false)}/>:<Orders key={branch} rows={orders} run={run} refresh={refresh} busy={busy}/>)}
- {page==='Inventory'&&<Inventory lookups={lookups} branch={branch} run={run} refresh={refresh} busy={busy}/>}
- {page==='Customers'&&<Records resource="customers" lookups={lookups} run={run} refresh={refresh} busy={busy}/>}
- {page==='Reports'&&<Reports data={data}/>}
- {page==='Manage'&&<><div className="tabs">{Object.entries(resources).filter(([key])=>key!=='customers').map(([key,v])=><button key={key} className={resource===key?'selected':''} onClick={()=>setResource(key)}>{v.label}</button>)}<button className={resource==='recipes'?'selected':''} onClick={()=>setResource('recipes')}>Recipes & costs</button></div>{resource==='recipes'?<Recipes lookups={lookups} run={run} busy={busy}/>:<Records key={resource} resource={resource} lookups={lookups} run={run} refresh={refresh} busy={busy}/>}</>}
- <footer className="mt-8 text-xs muted flex justify-between"><span>TableTrail · Restaurant intelligence</span><span>Powered by your MySQL database</span></footer></div></main></div>;
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  Package,
+  Users,
+  Settings,
+  Leaf,
+  ArrowUpRight,
+  IndianRupee,
+  Store,
+  LogOut,
+  Plus,
+  UtensilsCrossed,
+} from 'lucide-react';
+import { api, Brand } from '../components/shared';
+import { Records, resources } from '../components/Records';
+import { Dashboard } from '../components/Dashboard';
+import { NewOrder, Orders } from '../components/Orders';
+import { Inventory } from '../components/Inventory';
+import { Recipes } from '../components/Recipes';
+import { Reports } from '../components/Reports';
+export default function Home() {
+  const [user, setUser] = useState(null),
+    [loading, setLoading] = useState(true),
+    [busy, setBusy] = useState(false),
+    [notice, setNotice] = useState(null),
+    [page, setPage] = useState('Dashboard'),
+    [branch, setBranch] = useState(''),
+    [data, setData] = useState(null),
+    [orders, setOrders] = useState([]),
+    [lookups, setLookups] = useState({
+      branches: [],
+      menu: [],
+      categories: [],
+      customers: [],
+      promotions: [],
+      availability: [],
+      ingredients: [],
+      suppliers: [],
+    }),
+    [newOrder, setNewOrder] = useState(false),
+    [resource, setResource] = useState('branches');
+  const run = useCallback(async (work, message) => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await work();
+      if (message) setNotice({ text: message });
+    } catch (e) {
+      setNotice({ text: e.message, error: true });
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+  const refresh = useCallback(async () => {
+    if (!user) return;
+    const suffix = branch ? '?branch_id=' + branch : '';
+    const keys = [
+      'branches',
+      'menu',
+      'categories',
+      'customers',
+      'promotions',
+      'availability',
+      'ingredients',
+      'suppliers',
+    ];
+    const values = await Promise.all(keys.map((k) => api('/' + k)));
+    setLookups(Object.fromEntries(keys.map((k, i) => [k, values[i]])));
+    setOrders(await api('/orders' + suffix));
+    if (user.role !== 'staff') setData(await api('/analytics' + suffix));
+  }, [user, branch]);
+  useEffect(() => {
+    api('/auth/me')
+      .then((u) => {
+        setUser(u);
+        setPage(u.role === 'staff' ? 'Orders' : 'Dashboard');
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => {
+    if (user) run(refresh);
+  }, [refresh, run, user]);
+  if (loading) return <div className="spinner">Opening TableTrail…</div>;
+  if (!user)
+    return (
+      <main className="login">
+        <section className="login-story">
+          <Brand />
+          <div className="eyebrow mt-12" style={{ color: '#a8c496' }}>
+            Your restaurant, connected
+          </div>
+          <h1>
+            Every order.
+            <br />
+            Every branch.
+            <br />
+            <span style={{ color: '#c6e3aa' }}>One clear picture.</span>
+          </h1>
+          <p>
+            Track every order. Understand every customer.
+            <br />
+            Run every branch smarter.
+          </p>
+          <div className="mt-10 text-xs" style={{ color: '#88ab96' }}>
+            TABLETRAIL / RESTAURANT MANAGEMENT
+          </div>
+        </section>
+        <section className="login-box">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const form = new FormData(e.currentTarget);
+              run(async () => {
+                await api('/auth/login', 'POST', Object.fromEntries(form));
+                const u = await api('/auth/me');
+                setUser(u);
+                setPage(u.role === 'staff' ? 'Orders' : 'Dashboard');
+              });
+            }}
+          >
+            <div>
+              <div className="eyebrow mb-3">Welcome back</div>
+              <h1>Sign in to your workspace</h1>
+              <p className="muted">A smarter service starts here.</p>
+            </div>
+            {notice && (
+              <div className="notice error" role="alert">
+                {notice.text}
+              </div>
+            )}
+            <label>
+              Email address
+              <input
+                name="email"
+                type="email"
+                required
+                placeholder="admin@tabletrail.test"
+                autoComplete="username"
+              />
+            </label>
+            <label>
+              Password
+              <input
+                name="password"
+                type="password"
+                required
+                autoComplete="current-password"
+              />
+            </label>
+            <button className="primary" disabled={busy}>
+              Sign in <ArrowUpRight size={16} className="inline ml-2" />
+            </button>
+            <p className="login-foot">
+              Demo accounts: admin@tabletrail.test, manager@tabletrail.test,
+              staff@tabletrail.test.
+              <br />
+              Use the password chosen during database setup.
+            </p>
+          </form>
+        </section>
+      </main>
+    );
+  const navigation = [
+    ['Dashboard', LayoutDashboard],
+    ['Orders', ShoppingBag],
+    ['Inventory', Package],
+    ['Customers', Users],
+    ['Reports', ArrowUpRight],
+    ['Manage', Settings],
+  ].filter(([name]) =>
+    user.role === 'staff'
+      ? ['Orders', 'Customers'].includes(name)
+      : user.role === 'manager'
+        ? name !== 'Manage'
+        : true,
+  );
+  const descriptions = {
+    Dashboard: 'A fresh look at how your restaurants are doing.',
+    Orders: 'From the first dish to the final payment.',
+    Inventory: 'Keep every kitchen ready for service.',
+    Customers: 'Build a better understanding of your guests.',
+    Reports: 'Useful insights, straight from your database.',
+    Manage: 'The essentials that keep your restaurants running.',
+  };
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <Brand />
+        <div className="eyebrow mt-10">Workspace</div>
+        <nav className="nav" aria-label="Main navigation">
+          {navigation.map(([name, Icon]) => (
+            <button
+              key={name}
+              className={page === name ? 'active' : ''}
+              onClick={() => {
+                setPage(name);
+                setNewOrder(false);
+                setNotice(null);
+              }}
+            >
+              <Icon size={18} />
+              {name}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-note">
+          <Leaf size={25} className="mb-3" />
+          <strong className="text-white">Made for better service.</strong>
+          <br />
+          One connected view of your restaurant business.
+        </div>
+        <div className="sidebar-user">
+          <div className="avatar">{user.name[0]}</div>
+          <div>
+            <strong className="text-xs text-white">{user.name}</strong>
+            <div className="text-xs capitalize mt-1">{user.role}</div>
+          </div>
+        </div>
+      </aside>
+      <main className="main">
+        <header className="topbar">
+          <span className="muted text-xs">
+            Workspace <span className="mx-2">/</span>
+            <strong style={{ color: 'var(--ink)' }}>{page}</strong>
+          </span>
+          <div className="flex gap-3 items-center">
+            {user.role === 'admin' ? (
+              <select
+                aria-label="Branch filter"
+                value={branch}
+                onChange={(e) => {
+                  setBranch(e.target.value);
+                  setData(null);
+                  setNewOrder(false);
+                }}
+              >
+                <option value="">All branches</option>
+                {lookups.branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="badge">
+                {lookups.branches[0]?.name || 'Branch workspace'}
+              </span>
+            )}
+            <button
+              aria-label="Sign out"
+              className="secondary small"
+              onClick={() =>
+                run(async () => {
+                  await api('/auth/logout', 'POST', {});
+                  setUser(null);
+                  setData(null);
+                  setBranch('');
+                }, 'Signed out')
+              }
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        </header>
+        <div className="content">
+          <div className="page-heading">
+            <div>
+              <div className="eyebrow mb-2">
+                {page === 'Dashboard'
+                  ? 'The big picture'
+                  : 'Restaurant workspace'}
+              </div>
+              <h1>
+                {newOrder
+                  ? 'Create an order'
+                  : page === 'Dashboard'
+                    ? 'Business overview'
+                    : page}
+              </h1>
+              <p>{descriptions[page]}</p>
+            </div>
+            {['Dashboard', 'Orders'].includes(page) && !newOrder && (
+              <button
+                className="primary"
+                disabled={busy || !lookups.branches.length}
+                onClick={() => {
+                  setPage('Orders');
+                  setNewOrder(true);
+                }}
+              >
+                <Plus size={16} className="inline mr-1" /> New order
+              </button>
+            )}
+          </div>
+          {notice && (
+            <div
+              className={'notice ' + (notice.error ? 'error' : '')}
+              role={notice.error ? 'alert' : 'status'}
+            >
+              {notice.text}
+              <button
+                aria-label="Dismiss message"
+                onClick={() => setNotice(null)}
+              >
+                ×
+              </button>
+            </div>
+          )}
+          {busy && (
+            <div className="muted text-xs mb-3" role="status">
+              Updating workspace…
+            </div>
+          )}
+          {page === 'Dashboard' && (
+            <Dashboard
+              data={data}
+              orders={orders}
+              onOrders={() => setPage('Orders')}
+            />
+          )}
+          {page === 'Orders' &&
+            (newOrder ? (
+              <NewOrder
+                lookups={lookups}
+                branch={branch}
+                user={user}
+                run={run}
+                refresh={refresh}
+                busy={busy}
+                onClose={() => setNewOrder(false)}
+              />
+            ) : (
+              <Orders
+                key={branch}
+                rows={orders}
+                run={run}
+                refresh={refresh}
+                busy={busy}
+              />
+            ))}
+          {page === 'Inventory' && (
+            <Inventory
+              lookups={lookups}
+              branch={branch}
+              run={run}
+              refresh={refresh}
+              busy={busy}
+            />
+          )}
+          {page === 'Customers' && (
+            <Records
+              resource="customers"
+              lookups={lookups}
+              run={run}
+              refresh={refresh}
+              busy={busy}
+            />
+          )}
+          {page === 'Reports' && <Reports data={data} />}
+          {page === 'Manage' && (
+            <>
+              <div className="tabs">
+                {Object.entries(resources)
+                  .filter(([key]) => key !== 'customers')
+                  .map(([key, v]) => (
+                    <button
+                      key={key}
+                      className={resource === key ? 'selected' : ''}
+                      onClick={() => setResource(key)}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                <button
+                  className={resource === 'recipes' ? 'selected' : ''}
+                  onClick={() => setResource('recipes')}
+                >
+                  Recipes & costs
+                </button>
+              </div>
+              {resource === 'recipes' ? (
+                <Recipes lookups={lookups} run={run} busy={busy} />
+              ) : (
+                <Records
+                  key={resource}
+                  resource={resource}
+                  lookups={lookups}
+                  run={run}
+                  refresh={refresh}
+                  busy={busy}
+                />
+              )}
+            </>
+          )}
+          <footer className="mt-8 text-xs muted flex justify-between">
+            <span>TableTrail · Restaurant intelligence</span>
+            <span>Powered by your MySQL database</span>
+          </footer>
+        </div>
+      </main>
+    </div>
+  );
 }

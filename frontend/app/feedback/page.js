@@ -1,8 +1,103 @@
-"use client";
-import { useEffect,useState } from 'react';
-export default function Feedback(){
- const [token,setToken]=useState(''),[order,setOrder]=useState(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[saved,setSaved]=useState(false);
- useEffect(()=>{const token=new URLSearchParams(window.location.search).get('token');setToken(token||'');if(!token){setMessage('This feedback link is missing its token.');return;}
- fetch('/api/feedback/'+encodeURIComponent(token)).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);setOrder(d);}).catch(e=>setMessage(e.message));},[]);
- return <main className="min-h-screen flex items-center justify-center p-6"><section className="panel w-full max-w-md"><div className="eyebrow mb-4">TableTrail · Guest feedback</div><h1>How was your visit?</h1>{order&&<p className="muted">{order.branch} · Order #TT-{order.id}</p>}{message&&<p role="status" className="notice">{message}</p>}{order?.rating?<p>Thank you — feedback for this order has already been recorded.</p>:order&&!saved&&<form className="stack" onSubmit={async e=>{e.preventDefault();setBusy(true);const values=Object.fromEntries(new FormData(e.currentTarget));try{const r=await fetch('/api/feedback/'+encodeURIComponent(token),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(values)});const d=await r.json();if(!r.ok)throw new Error(d.error);setMessage(d.message);setSaved(true);}catch(e){setMessage(e.message);}finally{setBusy(false);}}}><label>Rating<select name="rating" required defaultValue="5">{[5,4,3,2,1].map(n=><option key={n} value={n}>{n} / 5</option>)}</select></label><label>Tell us more<textarea name="comment" maxLength={500} rows={4} placeholder="What did you enjoy? What could we improve?"/></label><button className="primary" disabled={busy}>Submit feedback</button></form>}<p className="muted text-xs mt-5 mb-0">Your feedback helps this restaurant improve its service.</p></section></main>;
+'use client';
+import { useEffect, useState } from 'react';
+export default function Feedback() {
+  const [token, setToken] = useState(''),
+    [order, setOrder] = useState(null),
+    [message, setMessage] = useState(''),
+    [busy, setBusy] = useState(false),
+    [saved, setSaved] = useState(false);
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('token');
+    setToken(token || '');
+    if (!token) {
+      setMessage('This feedback link is missing its token.');
+      return;
+    }
+    fetch('/api/feedback/' + encodeURIComponent(token))
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        setOrder(d);
+      })
+      .catch((e) => setMessage(e.message));
+  }, []);
+  return (
+    <main className="min-h-screen flex items-center justify-center p-6">
+      <section className="panel w-full max-w-md">
+        <div className="eyebrow mb-4">TableTrail · Guest feedback</div>
+        <h1>How was your visit?</h1>
+        {order && (
+          <p className="muted">
+            {order.branch} · Order #TT-{order.id}
+          </p>
+        )}
+        {message && (
+          <p role="status" className="notice">
+            {message}
+          </p>
+        )}
+        {order?.rating ? (
+          <p>Thank you — feedback for this order has already been recorded.</p>
+        ) : (
+          order &&
+          !saved && (
+            <form
+              className="stack"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setBusy(true);
+                const values = Object.fromEntries(
+                  new FormData(e.currentTarget),
+                );
+                try {
+                  const r = await fetch(
+                    '/api/feedback/' + encodeURIComponent(token),
+                    {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(values),
+                    },
+                  );
+                  const d = await r.json();
+                  if (!r.ok) throw new Error(d.error);
+                  setMessage(d.message);
+                  setSaved(true);
+                } catch (e) {
+                  setMessage(e.message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <label>
+                Rating
+                <select name="rating" required defaultValue="5">
+                  {[5, 4, 3, 2, 1].map((n) => (
+                    <option key={n} value={n}>
+                      {n} / 5
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Tell us more
+                <textarea
+                  name="comment"
+                  maxLength={500}
+                  rows={4}
+                  placeholder="What did you enjoy? What could we improve?"
+                />
+              </label>
+              <button className="primary" disabled={busy}>
+                Submit feedback
+              </button>
+            </form>
+          )
+        )}
+        <p className="muted text-xs mt-5 mb-0">
+          Your feedback helps this restaurant improve its service.
+        </p>
+      </section>
+    </main>
+  );
 }
