@@ -1,6 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
+import { readFile } from 'node:fs/promises';
 import { app } from '../src/app.js';
 import { pool, query } from '../src/db.js';
 if (!process.env.DB_NAME?.endsWith('_test'))
@@ -388,4 +389,24 @@ test('existing ingredient units cannot be changed without converting related dat
     (await query('SELECT unit FROM ingredients WHERE id=1'))[0].unit,
     'g',
   );
+});
+
+test('all submitted SQL query examples execute successfully', async () => {
+  const sql = await readFile(
+    new URL('../../database/queries.sql', import.meta.url),
+    'utf8',
+  );
+  const statements = sql
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('--'))
+    .join('\n')
+    .split(';')
+    .filter((s) => s.trim());
+  const connection = await pool.getConnection();
+  try {
+    for (const statement of statements) await connection.query(statement);
+  } finally {
+    await connection.rollback();
+    connection.release();
+  }
 });
