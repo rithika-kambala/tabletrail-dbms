@@ -12,6 +12,8 @@ export const config = {
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || 'tabletrail',
   decimalNumbers: true,
+  // DATE has no timezone: keep promotion dates unchanged in JSON and edit forms.
+  dateStrings: ['DATE'],
 };
 export const pool = mysql.createPool({ ...config, connectionLimit: 10 });
 export async function query(sql, values = [], db = pool) {

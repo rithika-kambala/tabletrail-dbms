@@ -244,6 +244,11 @@ test('feedback belongs to a completed order and is unique', async () => {
     .expect(409);
 });
 test('unavailable items and expired promotions are rejected without partial orders', async () => {
+  const promos = await admin.get('/api/promotions').expect(200);
+  const [calendar] = await query(
+    "SELECT DATE_FORMAT(starts_on,'%Y-%m-%d') day FROM promotions WHERE id=1",
+  );
+  assert.equal(promos.body[0].starts_on, calendar.day);
   await manager
     .put('/api/availability/1/1')
     .send({ available: false })
