@@ -40,6 +40,7 @@ jobs:
           echo "DEMO_PASSWORD=$DEMO_PASSWORD" >> "$GITHUB_ENV"
           echo "JWT_SECRET=$JWT_SECRET" >> "$GITHUB_ENV"
       - run: npm ci
+      - run: npm run format:check
       - run: npm test
       - run: npm run db:setup
       - run: npm run test:integration
