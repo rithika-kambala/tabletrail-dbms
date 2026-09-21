@@ -1,0 +1,24 @@
+{
+  "name": "tabletrail",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "build": "npm run build -w frontend",
+    "start": "concurrently -k \"npm start -w backend\" \"npm start -w frontend\"",
+    "db:setup": "npm run db:setup -w backend",
+    "test": "npm test -w backend",
+    "test:integration": "npm run test:integration -w backend",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "@playwright/test": "^1.56.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
