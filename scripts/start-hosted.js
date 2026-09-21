@@ -13,6 +13,7 @@ const frontend = spawn(
   [
     'node_modules/next/dist/bin/next',
     'start',
+    'frontend',
     '--hostname',
     '0.0.0.0',
     '--port',
