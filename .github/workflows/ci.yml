@@ -1,0 +1,63 @@
+name: Test TableTrail
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ''
+      DB_NAME: tabletrail_test
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Generate temporary test secrets
+        run: |
+          DEMO_PASSWORD=$(openssl rand -hex 16)
+          JWT_SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$DEMO_PASSWORD"
+          echo "::add-mask::$JWT_SECRET"
+          echo "DEMO_PASSWORD=$DEMO_PASSWORD" >> "$GITHUB_ENV"
+          echo "JWT_SECRET=$JWT_SECRET" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm test
+      - run: npm run db:setup
+      - run: npm run test:integration
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Seed clean browser demo
+        run: npm run db:setup
+        env:
+          DB_NAME: tabletrail_demo
+      - name: Browser tests
+        run: npm run test:e2e
+        env:
+          DB_NAME: tabletrail_demo
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tabletrail-browser-results
+          path: |
+            screenshots/*.png
+            playwright-report/
+            test-results/

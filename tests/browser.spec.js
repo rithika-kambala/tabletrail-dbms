@@ -1,0 +1,43 @@
+const {test,expect}=require('@playwright/test');
+async function login(page,email){await page.goto('/');await page.getByLabel('Email address').fill(email);await page.getByLabel('Password',{exact:true}).fill(process.env.DEMO_PASSWORD);await page.getByRole('button',{name:'Sign in',exact:true}).click();}
+test('admin dashboard, management, inventory and responsive layout',async({page})=>{
+ await page.goto('/');await page.screenshot({path:'screenshots/login.png',fullPage:true});
+ await login(page,'admin@tabletrail.test');
+ await expect(page.getByRole('heading',{name:'Business overview'})).toBeVisible();
+ await expect(page.getByText('Jubilee Hills',{exact:true}).first()).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Revenue overview'})).toBeVisible();
+ await page.screenshot({path:'screenshots/dashboard.png',fullPage:true});
+ await page.getByRole('button',{name:'Manage',exact:true}).click();
+ await expect(page.getByRole('cell',{name:'Jubilee Hills',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Inventory',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Ingredient inventory'})).toBeVisible();
+ await page.screenshot({path:'screenshots/inventory.png',fullPage:true});
+ await page.getByRole('button',{name:'Reports',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Customer behavior'})).toBeVisible();
+ await page.setViewportSize({width:390,height:844});
+ await page.getByRole('button',{name:'Dashboard',exact:true}).click();
+ await page.screenshot({path:'screenshots/mobile.png',fullPage:true});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();
+});
+test('staff creates and pays an order; customer submits receipt feedback',async({page,context})=>{
+ await login(page,'staff@tabletrail.test');
+ await expect(page.getByRole('heading',{name:'Orders',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Manage',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'New order',exact:false}).click();
+ await page.getByLabel('Customer',{exact:true}).selectOption('1');
+ await page.getByRole('button',{name:'Add',exact:true}).first().click();
+ await page.screenshot({path:'screenshots/new-order.png',fullPage:true});
+ await page.getByRole('button',{name:'Create order',exact:true}).click();
+ await expect(page.getByRole('status').filter({hasText:'Order created'})).toBeVisible();
+ await page.getByRole('button',{name:'View',exact:true}).first().click();
+ await page.getByRole('button',{name:'Complete payment',exact:true}).click();
+ await expect(page.getByRole('status').filter({hasText:'Payment recorded'})).toBeVisible();
+ await page.getByRole('button',{name:'View',exact:true}).first().click();
+ const href=await page.getByRole('link',{name:'Open customer feedback page'}).getAttribute('href');
+ const guest=await context.browser().newContext();const guestPage=await guest.newPage();
+ await guestPage.goto('http://localhost:3000'+href);
+ await guestPage.getByLabel('Tell us more').fill('A lovely lunch, thank you!');
+ await guestPage.getByRole('button',{name:'Submit feedback'}).click();
+ await expect(guestPage.getByRole('status')).toHaveText('Thank you for your feedback!');
+ await guest.close();
+});
