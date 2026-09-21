@@ -102,6 +102,20 @@ A production deployment needs HTTPS, `NODE_ENV=production`, and the real `APP_OR
 
 Primary and candidate keys, foreign keys, composite keys, UNIQUE/NOT NULL/CHECK/DEFAULT constraints, 1NF–3NF, 1:1/1:N/M:N relationships, INNER/LEFT/RIGHT joins, GROUP BY/HAVING, aggregates, nested/correlated queries, views, stored procedures and functions, triggers, transactions, and indexing. Each is mapped to its implementation in the database design document.
 
+## Screenshots
+
+![TableTrail dashboard](screenshots/dashboard.png)
+
+[Login](screenshots/login.png) · [Order entry](screenshots/new-order.png) · [Inventory](screenshots/inventory.png) · [Mobile dashboard](screenshots/mobile.png)
+
+These are real screenshots from the application running against seeded MySQL data in the verified browser test run.
+
+## Verified results
+
+**26 tests passed:** 6 validation, 18 MySQL integration, and 2 browser workflow tests. Production build and formatting checks passed. [View the successful run](https://github.com/rithika-kambala/tabletrail-dbms/actions/runs/35560191216).
+
+The application was executed and tested in GitHub Actions. To run it on your computer, configure your own MySQL credentials using Quick start above; no local password is assumed. GitHub stores the source code, not a live hosted application.
+
 ## Learning and submission
 
 - [17 development phases](docs/development-phases.md)

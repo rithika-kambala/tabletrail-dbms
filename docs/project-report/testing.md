@@ -2,6 +2,14 @@
 
 The [GitHub Actions workflow](https://github.com/rithika-kambala/tabletrail-dbms/actions/workflows/ci.yml) runs against a temporary MySQL 8.4 service with secrets generated for each run. Check the latest green run for the exact tested revision. Tests do not need your local database credentials.
 
+## Verified result — 21 September 2026
+
+[Run 35560191216](https://github.com/rithika-kambala/tabletrail-dbms/actions/runs/35560191216) passed on application revision `7ea9b0c`: **6 validation + 18 MySQL integration + 2 browser tests = 26 passing tests**. MySQL setup, all submitted SQL examples, production build, and formatting checks also passed. The later handoff commit adds documentation and these verified screenshots; application code is unchanged.
+
+Screenshots were reviewed at desktop and mobile widths. Narrow tables scroll within their panels instead of widening the page. Dependency audit at handoff reported zero known vulnerabilities.
+
+Local server startup was restricted by the build workspace, so the integration and browser checks ran against real MySQL 8.4 in GitHub Actions. These results are not based on a mocked database.
+
 ## Test matrix
 
 | Check                                                                      | Expected result                                                             | Implementation        |
