@@ -1,5 +1,10 @@
 name: Test TableTrail
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    paths-ignore: ['**/*.md', 'screenshots/**', 'LICENSE']
+  pull_request:
+    paths-ignore: ['**/*.md', 'screenshots/**', 'LICENSE']
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

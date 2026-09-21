@@ -229,6 +229,7 @@ h3 {
 }
 .card,
 .panel {
+  min-width: 0;
   background: white;
   border: 1px solid var(--line);
   border-radius: 12px;
