@@ -14,6 +14,14 @@ export const config = {
   decimalNumbers: true,
   // DATE has no timezone: keep promotion dates unchanged in JSON and edit forms.
   dateStrings: ['DATE'],
+  ...(process.env.DB_CA_BASE64
+    ? {
+        ssl: {
+          ca: Buffer.from(process.env.DB_CA_BASE64, 'base64'),
+          rejectUnauthorized: true,
+        },
+      }
+    : {}),
 };
 export const pool = mysql.createPool({ ...config, connectionLimit: 10 });
 export async function query(sql, values = [], db = pool) {

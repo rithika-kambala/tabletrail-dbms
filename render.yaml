@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: tabletrail
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: node scripts/start-hosted.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: tabletrail
+      - key: DB_CA_BASE64
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: APP_ORIGIN
+        sync: false

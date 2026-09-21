@@ -102,6 +102,10 @@ A production deployment needs HTTPS, `NODE_ENV=production`, and the real `APP_OR
 
 Primary and candidate keys, foreign keys, composite keys, UNIQUE/NOT NULL/CHECK/DEFAULT constraints, 1NF–3NF, 1:1/1:N/M:N relationships, INNER/LEFT/RIGHT joins, GROUP BY/HAVING, aggregates, nested/correlated queries, views, stored procedures and functions, triggers, transactions, and indexing. Each is mapped to its implementation in the database design document.
 
+## Free cloud deployment
+
+See [Render + Aiven deployment](docs/free-deployment.md). This uses one free Render web service and one free Aiven MySQL service. It has a separate cloud database and credentials; your local database remains on your computer.
+
 ## Screenshots
 
 ![TableTrail dashboard](screenshots/dashboard.png)
